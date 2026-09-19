@@ -1,102 +1,77 @@
-const features = [
-  {
-    title: 'Select any text',
-    text: 'Highlight a paragraph or sentence on any webpage and push it into your reading context.',
-  },
-  {
-    title: 'Ask AI anything',
-    text: 'Summarize, explain, translate, or compare what you selected without leaving the page.',
-  },
-  {
-    title: 'Learn faster',
-    text: 'Turn complex content into digestible explanations, action points, and follow-up questions.',
-  },
-];
+import { Box, Button, Container, Link, Stack, TextField, Typography } from '@mui/material';
 
-const examples = [
-  'Explain this in simpler words',
-  'What are the key takeaways?',
-  'Give me 3 action items from this text',
-  'Turn this into a summary for my team',
-];
+const navItems = ['Features', 'Testimonials', 'Highlights', 'Pricing', 'FAQ', 'Blog'];
 
 export default function HomePage() {
   return (
-    <main className="page-shell">
-      <section className="hero">
-        <div className="hero-copy">
-          <span className="badge">AI reading companion</span>
-          <h1>Understand any page with a single highlight.</h1>
-          <p>
-            pageOracle helps you select text from any website and instantly ask AI to explain,
-            summarize, and contextualize it.
-          </p>
+    <Box className="marketing-page">
+      <Container maxWidth="xl" className="marketing-container">
+        <Box component="header" className="site-nav">
+          <Link href="#top" underline="none" className="brand">
+            <Box className="brand-mark" aria-hidden="true">
+              <span className="mark-one" />
+              <span className="mark-two" />
+              <span className="mark-three" />
+              <span className="mark-four" />
+            </Box>
+            <Typography component="span" className="brand-name">pageOracle</Typography>
+          </Link>
 
-          <div className="cta-row">
-            <button className="primary">Try demo</button>
-            <button className="secondary">View roadmap</button>
-          </div>
+          <Box component="nav" className="nav-links" aria-label="Main navigation">
+            {navItems.map((item) => (
+              <Link key={item} href={`#${item.toLowerCase()}`} underline="none">{item}</Link>
+            ))}
+          </Box>
 
-          <div className="mini-stats">
-            <div>
-              <strong>5s</strong>
-              <span>average answer time</span>
-            </div>
-            <div>
-              <strong>∞</strong>
-              <span>webpage contexts</span>
-            </div>
-            <div>
-              <strong>24/7</strong>
-              <span>AI helper</span>
-            </div>
-          </div>
-        </div>
+          <Stack direction="row" spacing={3} alignItems="center" className="nav-actions">
+            <Link href="#signin" underline="none">Sign in</Link>
+            <Button variant="contained" className="dark-button">Sign up</Button>
+          </Stack>
+        </Box>
 
-        <div className="mockup">
-          <div className="browser-bar">
-            <span className="dot red" />
-            <span className="dot yellow" />
-            <span className="dot green" />
-          </div>
+        <Box component="main" id="top" className="hero-section">
+          <Typography component="h1" className="hero-title">
+            Understand any <Box component="span">page</Box>
+          </Typography>
+          <Typography component="p" className="hero-description">
+            Select any text on the web and let pageOracle explain, summarize, and contextualize it in seconds.
+            <br />Your AI reading companion for learning faster.
+          </Typography>
 
-          <div className="article-card">
-            <p className="selection">
-              “The most effective teams don’t just ship faster — they convert knowledge into action
-              at every stage of the product lifecycle.”
-            </p>
-          </div>
+          <Stack component="form" direction="row" className="signup-form">
+            <TextField
+              type="email"
+              placeholder="Your email address"
+              variant="outlined"
+              aria-label="Email address"
+              fullWidth
+            />
+            <Button type="submit" variant="contained" className="dark-button start-button">Start now</Button>
+          </Stack>
+          <Typography component="p" className="terms-copy">
+            By clicking &quot;Start now&quot; you agree to our <Link href="#terms">Terms &amp; Conditions</Link>.
+          </Typography>
 
-          <div className="chat-card">
-            <div className="chat-row incoming">
-              <span>What does this mean for a startup?</span>
-            </div>
-            <div className="chat-row outgoing">
-              <span>It suggests focusing on fast learning loops and turning insights into daily shipping decisions.</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="features">
-        {features.map((feature) => (
-          <article className="feature-card" key={feature.title}>
-            <h3>{feature.title}</h3>
-            <p>{feature.text}</p>
-          </article>
-        ))}
-      </section>
-
-      <section className="prompt-panel">
-        <div className="panel-header">
-          <span>Suggested prompts</span>
-        </div>
-        <div className="prompt-grid">
-          {examples.map((example) => (
-            <button key={example}>{example}</button>
-          ))}
-        </div>
-      </section>
-    </main>
+          <Box className="product-preview" aria-label="pageOracle product preview">
+            <Box className="preview-toolbar"><span /><span /><span /></Box>
+            <Box className="preview-content">
+              <Box className="preview-article">
+                <Typography className="preview-kicker">READING CONTEXT</Typography>
+                <Typography component="h2">Turn every page into a conversation.</Typography>
+                <Typography>Highlight any paragraph to ask questions, find the key ideas, and move from reading to action.</Typography>
+                <Box className="highlight-line" />
+                <Box className="text-lines"><span /><span /><span /><span /></Box>
+              </Box>
+              <Box className="assistant-card">
+                <Typography className="preview-kicker">PAGEORACLE AI</Typography>
+                <Typography component="h3">What does this mean?</Typography>
+                <Typography>It means you can turn complex content into clear explanations and practical next steps.</Typography>
+                <Button className="ask-button">Ask another question&nbsp; →</Button>
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+      </Container>
+    </Box>
   );
 }
