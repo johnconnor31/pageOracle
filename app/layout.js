@@ -1,3 +1,5 @@
+import './globals.css';
+
 export const metadata = {
   title: 'pageOracle',
   description: 'Select text on any webpage and ask AI what it means.',
