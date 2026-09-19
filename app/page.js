@@ -17,7 +17,12 @@ function validateUrl(value) {
 }
 
 function ChatGptIcon() {
-  return <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" className="ai-icon"><path fill="currentColor" d="M21.2 10.1a5.4 5.4 0 0 0-5.2-4.4A5.4 5.4 0 0 0 6.2 4.2a5.4 5.4 0 0 0-3.4 8.5A5.4 5.4 0 0 0 8 21.3a5.4 5.4 0 0 0 8.1-2.4 5.4 5.4 0 0 0 5.1-8.8ZM8.1 19.7a3.8 3.8 0 0 1-3.5-5.2l.2-.4.3.2 3.8 2.2v1.8l-.8.5Zm.2-5-3.7-2.1a3.8 3.8 0 0 1 1.3-6.8l.4-.1v4.5l2 1.2v3.3Zm1.2 3.1v-4.4l2.8-1.6 2.8 1.6v3.8l-2.8 1.6-2.8-1Zm2.8-7.9-2.8 1.6-2.8-1.6V6.7l2.8-1.6 2.8 1.6v3.2Zm1.6 1 3.8-2.2a3.8 3.8 0 0 1 1.9 5.6l-.2.3-3.9-2.2v-1.5l-1.6-.9Zm3.5 7.5a3.8 3.8 0 0 1-3.1.1l-.4-.2v-4.4l2-1.1 3.8 2.1a3.8 3.8 0 0 1-2.3 3.5Z" /></svg>;
+  return (
+    <svg className="ai-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+      <path fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" d="M12 3.3a4.1 4.1 0 0 1 3.9 2.9 4.1 4.1 0 0 1 3.9 5.8 4.1 4.1 0 0 1-3.3 6.2 4.1 4.1 0 0 1-7.1 2.1 4.1 4.1 0 0 1-5-4.9 4.1 4.1 0 0 1 2.9-6.8A4.1 4.1 0 0 1 12 3.3Z" />
+      <path fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" d="m12 3.3 3.9 2.9-.2 4.8-3.7 2.2-4.1-2.2V6.4M19.8 12l-4.1-1-3.7 2.2.1 4.5 3.7 2.5M16.5 18.2l-3.2-3.1-4.1 1.8-2.7-1.5M4.4 10.6l4.5.4 2.9-3.1-.1-4.6M5.3 15.4l-.8-4.8 4.1-2.7 4 2.1" />
+    </svg>
+  );
 }
 
 export default function HomePage() {
@@ -34,6 +39,7 @@ export default function HomePage() {
   const [isShaking, setIsShaking] = useState(false);
   const contentRef = useRef(null);
   const popoverRef = useRef(null);
+  const aiButtonRef = useRef(null);
   const shakeTimerRef = useRef(null);
 
   function resetSelection() {
@@ -66,7 +72,7 @@ export default function HomePage() {
     };
 
     const handlePointerDown = (event) => {
-      if (contentRef.current?.contains(event.target) || popoverRef.current?.contains(event.target)) return;
+      if (contentRef.current?.contains(event.target) || popoverRef.current?.contains(event.target) || aiButtonRef.current?.contains(event.target)) return;
       resetSelection();
     };
 
@@ -106,7 +112,7 @@ export default function HomePage() {
     const validationError = validateUrl(url);
     if (validationError) { setError(validationError); setPage(null); return; }
     const normalizedUrl = /^https?:\/\//i.test(url.trim()) ? url.trim() : `https://${url.trim()}`;
-    setUrl(normalizedUrl);
+    setUrl(normalized);
     window.history.replaceState({}, '', `?url=${encodeURIComponent(normalizedUrl)}`);
     await loadPage(normalizedUrl);
   }
@@ -169,7 +175,7 @@ export default function HomePage() {
         <Typography component="h1" className="hero-title">Understand any <Box component="span">page</Box></Typography>
         <Typography component="p" className="hero-description">Fetch any public page into pageOracle and ask AI about selected text.<br />Enter a URL to get started.</Typography>
         <Stack component="form" direction="row" onSubmit={handleSubmit} noValidate className="signup-form"><TextField value={url} onChange={(event) => { setUrl(event.target.value); if (error) setError(''); }} placeholder="Enter a page URL" variant="outlined" aria-label="Page URL" error={Boolean(error)} helperText={error || ' '} fullWidth /><Button type="submit" variant="contained" className="dark-button start-button" disabled={loading}>{loading ? 'Fetching…' : 'Start now'}</Button></Stack>
-        {page ? <Box className="browser-workspace" aria-label="Fetched page text"><Box className="browser-toolbar"><span className="browser-secure">●</span><Typography noWrap>{page.url}</Typography></Box><Box ref={contentRef} className="extracted-page" sx={{ position: 'relative', textAlign: 'left', userSelect: 'text', '& h1, & h2, & h3, & h4, & h5, & h6': { color: '#101827', lineHeight: 1.25, margin: '1.5rem 0 .75rem' }, '& p': { color: '#42536f', fontSize: '18px', lineHeight: 1.8, margin: '0 0 1.25rem' }, '& li': { color: '#42536f', lineHeight: 1.7, margin: '.5rem 0' }, '& blockquote': { borderLeft: '4px solid #0878ee', color: '#52627d', fontStyle: 'italic', margin: '1.5rem 0', padding: '.75rem 1rem' }, '& img': { maxWidth: '100%', height: 'auto' } }}><Typography className="preview-kicker">FETCHED PAGE · {page.wordCount.toLocaleString()} WORDS</Typography><Typography component="h2">{page.title}</Typography><Box dangerouslySetInnerHTML={{ __html: page.html }} /></Box><Button aria-label="Ask AI about selected text" className={isShaking ? 'ai-button-shake' : ''} variant="contained" disabled={!selectionRect} onMouseDown={(event) => event.preventDefault()} onClick={openAsk} startIcon={<ChatGptIcon />} sx={{ position: 'fixed', top: { xs: 16, sm: 24 }, right: { xs: 16, sm: 28 }, zIndex: 20, minWidth: 52, width: 52, height: 52, borderRadius: '50%', padding: 0, opacity: selectionRect ? 1 : 0.5, transition: 'opacity .2s', '& .MuiButton-startIcon': { margin: 0 } }} />{popoverPosition && <Box ref={popoverRef} className="ai-popover" sx={popoverSx}><Stack direction="row" justifyContent="space-between" alignItems="center"><Typography fontWeight={700} fontSize="1.5rem">Ask AI</Typography><Button size="small" onClick={closeAsk}>Close</Button></Stack><Typography className="selection-preview">“{selection}”</Typography><Box className="conversation">{conversation.map((item, index) => <Box key={`${item.role}-${index}`} className={`chat-message ${item.role}`}><Typography>{item.text}</Typography></Box>)}</Box><Box component="form" onSubmit={askAi} className="chat-form"><TextField value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Ask a follow-up…" size="small" fullWidth /><Button type="submit" disabled={chatLoading || !question.trim()}>{chatLoading ? '…' : 'Send'}</Button></Box></Box>}</Box> : <Box className="product-preview" aria-label="pageOracle product preview"><Box className="preview-toolbar"><span /><span /><span /></Box><Box className="preview-content"><Box className="preview-article"><Typography className="preview-kicker">READING CONTEXT</Typography><Typography component="h2">Turn every page into a conversation.</Typography><Typography>Fetch public page text, find the key ideas, and ask questions about it.</Typography></Box><Box className="assistant-card"><Typography className="preview-kicker">PAGEORACLE AI</Typography><Typography component="h3">What does this mean?</Typography><Typography>Highlight text after loading a page to start a conversation.</Typography></Box></Box></Box>}
+        {page ? <Box className="browser-workspace" aria-label="Fetched page text"><Box className="browser-toolbar"><span className="browser-secure">●</span><Typography noWrap>{page.url}</Typography></Box><Box ref={contentRef} className="extracted-page" sx={{ position: 'relative', textAlign: 'left', userSelect: 'text', '& h1, & h2, & h3, & h4, & h5, & h6': { color: '#101827', lineHeight: 1.25, margin: '1.5rem 0 .75rem' }, '& p': { color: '#42536f', fontSize: '18px', lineHeight: 1.8, margin: '0 0 1.25rem' }, '& li': { color: '#42536f', lineHeight: 1.7, margin: '.5rem 0' }, '& blockquote': { borderLeft: '4px solid #0878ee', color: '#52627d', fontStyle: 'italic', margin: '1.5rem 0', padding: '.75rem 1rem' }, '& img': { maxWidth: '100%', height: 'auto' } }}><Typography className="preview-kicker">FETCHED PAGE · {page.wordCount.toLocaleString()} WORDS</Typography><Typography component="h2">{page.title}</Typography><Box dangerouslySetInnerHTML={{ __html: page.html }} /></Box><Button ref={aiButtonRef} type="button" aria-label="Ask AI about selected text" className={isShaking ? 'ai-button-shake' : ''} variant="contained" disabled={!selectionRect} onMouseDown={(event) => event.preventDefault()} onClick={openAsk} startIcon={<ChatGptIcon />} sx={{ position: 'fixed', top: { xs: 16, sm: 24 }, right: { xs: 16, sm: 28 }, zIndex: 20, minWidth: 52, width: 52, height: 52, borderRadius: '50%', padding: 0, color: '#fff', '& svg.ai-icon': { display: 'block', width: 22, height: 22, color: '#fff' }, opacity: selectionRect ? 1 : 0.5, transition: 'opacity .2s', '& .MuiButton-startIcon': { margin: 0 } }} />{popoverPosition && <Box ref={popoverRef} className="ai-popover" sx={popoverSx}><Stack direction="row" justifyContent="space-between" alignItems="center"><Typography fontWeight={700} fontSize="1.5rem">Ask AI</Typography><Button size="small" onClick={closeAsk}>Close</Button></Stack><Typography className="selection-preview">“{selection}”</Typography><Box className="conversation">{conversation.map((item, index) => <Box key={`${item.role}-${index}`} className={`chat-message ${item.role}`}><Typography>{item.text}</Typography></Box>)}</Box><Box component="form" onSubmit={askAi} className="chat-form"><TextField value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Ask a follow-up…" size="small" fullWidth /><Button type="submit" disabled={chatLoading || !question.trim()}>{chatLoading ? '…' : 'Send'}</Button></Box></Box>}</Box> : <Box className="product-preview" aria-label="pageOracle product preview"><Box className="preview-toolbar"><span /><span /><span /></Box><Box className="preview-content"><Box className="preview-article"><Typography className="preview-kicker">READING CONTEXT</Typography><Typography component="h2">Turn every page into a conversation.</Typography><Typography>Fetch public page text, find the key ideas, and ask questions about it.</Typography></Box><Box className="assistant-card"><Typography className="preview-kicker">PAGEORACLE AI</Typography><Typography component="h3">What does this mean?</Typography><Typography>Highlight text after loading a page to start a conversation.</Typography></Box></Box></Box>}
       </Box>
     </Container>
   </Box>;
