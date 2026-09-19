@@ -69,10 +69,13 @@ export async function POST(request) {
       $('script, style, noscript, template, svg, nav, header, footer, aside, form').remove();
 
       const mainArticle = $('main, article').first();
-      text = mainArticle.length ? mainArticle.text(' ') : $('body').text(' ');
+      // Cheerio's text() getter returns a string. Passing a separator can act as a setter
+      // in some versions, which caused the "replace is not a function" error.
+      text = mainArticle.length ? mainArticle.text() : $('body').text();
     }
 
-    text = text?.replace(/\s+/g, ' ').trim().slice(0, MAX_TEXT_LENGTH);
+    if (typeof text !== 'string') throw new Error('The fetched page did not contain readable text.');
+    text = text.replace(/\s+/g, ' ').trim().slice(0, MAX_TEXT_LENGTH);
     if (!text) throw new Error('No readable text was found at this URL.');
 
     return NextResponse.json({
