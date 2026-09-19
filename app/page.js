@@ -27,6 +27,7 @@ export default function HomePage() {
   const [conversation, setConversation] = useState([]);
   const [question, setQuestion] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
+  const [buttonHasShaken, setButtonHasShaken] = useState(false);
   const contentRef = useRef(null);
 
   function readSelection() {
@@ -34,8 +35,10 @@ export default function HomePage() {
     if (!current || current.isCollapsed || !contentRef.current?.contains(current.anchorNode)) return null;
     const value = current.toString().trim();
     if (!value) return null;
-    const range = current.getRangeAt(0).getBoundingClientRect();
-    return { value: value.slice(0, 12000), rect: range };
+    const range = current.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    if (!rect.width && !rect.height) return null;
+    return { value: value.slice(0, 12000), rect };
   }
 
   useEffect(() => {
@@ -45,21 +48,25 @@ export default function HomePage() {
       setSelection(selected.value);
       setSelectionRect(selected.rect);
       setPopoverPosition(null);
+      if (!buttonHasShaken) setButtonHasShaken(true);
     };
+
+    // mouseup preserves the native blue selection on desktop. Do not replace it
+    // with a DOM mark until the user closes the AI popover.
     document.addEventListener('mouseup', handleSelection);
     document.addEventListener('touchend', handleSelection);
     return () => {
       document.removeEventListener('mouseup', handleSelection);
       document.removeEventListener('touchend', handleSelection);
     };
-  }, [page]);
+  }, [page, buttonHasShaken]);
 
   async function handleSubmit(event) {
     event.preventDefault();
     const validationError = validateUrl(url);
     if (validationError) { setError(validationError); setPage(null); return; }
     const normalizedUrl = /^https?:\/\//i.test(url.trim()) ? url.trim() : `https://${url.trim()}`;
-    setUrl(normalizedUrl); setError(''); setLoading(true); setConversation([]); setSelection(''); setSelectionRect(null); setPopoverPosition(null);
+    setUrl(normalizedUrl); setError(''); setLoading(true); setConversation([]); resetSelection();
     try {
       const response = await fetch('/api/extract', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: normalizedUrl }) });
       const result = await response.json();
@@ -68,15 +75,24 @@ export default function HomePage() {
     } catch (requestError) { setPage(null); setError(requestError.message); } finally { setLoading(false); }
   }
 
+  function resetSelection() {
+    setSelection('');
+    setSelectionRect(null);
+    setPopoverPosition(null);
+    window.getSelection()?.removeAllRanges();
+  }
+
   function openAsk() {
     if (!selectionRect || !contentRef.current) return;
     const container = contentRef.current.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
     const popoverWidth = Math.min(780, viewportWidth - 32);
-    const popoverHeight = Math.min(560, window.innerHeight - 32);
+    const popoverHeight = Math.min(560, viewportHeight - 32);
     const leftViewport = Math.min(Math.max(16, selectionRect.left), viewportWidth - popoverWidth - 16);
     const above = selectionRect.top - popoverHeight - 12;
-    const topViewport = above >= 16 ? above : Math.min(selectionRect.bottom + 12, window.innerHeight - popoverHeight - 16);
+    const below = selectionRect.bottom + 12;
+    const topViewport = above >= 16 ? above : Math.min(below, viewportHeight - popoverHeight - 16);
     setPopoverPosition({ top: topViewport - container.top, left: leftViewport - container.left, width: popoverWidth, height: popoverHeight });
     setConversation([]);
     setQuestion('Explain this in simple terms.');
@@ -84,22 +100,15 @@ export default function HomePage() {
 
   function closeAsk() {
     setPopoverPosition(null);
-    window.getSelection()?.removeAllRanges();
-    if (selection && contentRef.current) {
-      const walker = document.createTreeWalker(contentRef.current, NodeFilter.SHOW_TEXT);
-      let node;
-      while ((node = walker.nextNode())) {
-        const index = node.nodeValue.indexOf(selection);
-        if (index >= 0) {
-          const range = document.createRange();
-          range.setStart(node, index); range.setEnd(node, index + selection.length);
-          const mark = document.createElement('mark');
-          mark.className = 'saved-highlight';
-          range.surroundContents(mark);
-          break;
-        }
-      }
+    const currentSelection = window.getSelection();
+    if (selection && contentRef.current && currentSelection && !currentSelection.isCollapsed) {
+      const range = currentSelection.getRangeAt(0);
+      const mark = document.createElement('mark');
+      mark.className = 'saved-highlight';
+      try { range.surroundContents(mark); } catch { /* Native selection may cross HTML blocks. */ }
     }
+    currentSelection?.removeAllRanges();
+    setSelectionRect(null);
   }
 
   async function askAi(event) {
@@ -130,7 +139,7 @@ export default function HomePage() {
         <Typography component="h1" className="hero-title">Understand any <Box component="span">page</Box></Typography>
         <Typography component="p" className="hero-description">Fetch any public page into pageOracle and ask AI about selected text.<br />Enter a URL to get started.</Typography>
         <Stack component="form" direction="row" onSubmit={handleSubmit} noValidate className="signup-form"><TextField value={url} onChange={(event) => { setUrl(event.target.value); if (error) setError(''); }} placeholder="Enter a page URL" variant="outlined" aria-label="Page URL" error={Boolean(error)} helperText={error || ' '} fullWidth /><Button type="submit" variant="contained" className="dark-button start-button" disabled={loading}>{loading ? 'Fetching…' : 'Start now'}</Button></Stack>
-        {page ? <Box className="browser-workspace" aria-label="Fetched page text"><Box className="browser-toolbar"><span className="browser-secure">●</span><Typography noWrap>{page.url}</Typography></Box><Box ref={contentRef} className="extracted-page" sx={{ position: 'relative', textAlign: 'left', '& h1, & h2, & h3, & h4, & h5, & h6': { color: '#101827', lineHeight: 1.25, margin: '1.5rem 0 .75rem' }, '& p': { color: '#42536f', fontSize: '18px', lineHeight: 1.8, margin: '0 0 1.25rem' }, '& li': { color: '#42536f', lineHeight: 1.7, margin: '.5rem 0' }, '& blockquote': { borderLeft: '4px solid #0878ee', color: '#52627d', fontStyle: 'italic', margin: '1.5rem 0', padding: '.75rem 1rem' }, '& img': { maxWidth: '100%', height: 'auto' } }}><Typography className="preview-kicker">FETCHED PAGE · {page.wordCount.toLocaleString()} WORDS</Typography><Typography component="h2">{page.title}</Typography><Box dangerouslySetInnerHTML={{ __html: page.html }} />{popoverPosition && <Box className="ai-popover" sx={popoverSx}><Stack direction="row" justifyContent="space-between" alignItems="center"><Typography fontWeight={700} fontSize="1.5rem">Ask AI</Typography><Button size="small" onClick={closeAsk}>Close</Button></Stack><Typography className="selection-preview">“{selection}”</Typography><Box className="conversation">{conversation.map((item, index) => <Box key={`${item.role}-${index}`} className={`chat-message ${item.role}`}><Typography>{item.text}</Typography></Box>)}</Box><Box component="form" onSubmit={askAi} className="chat-form"><TextField value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Ask a follow-up…" size="small" fullWidth /><Button type="submit" disabled={chatLoading || !question.trim()}>{chatLoading ? '…' : 'Send'}</Button></Box></Box>}</Box>{selection && !popoverPosition && <Button className="ask-ai-sticky" variant="contained" onClick={openAsk} sx={{ position: 'fixed', right: { xs: 16, sm: 28 }, bottom: { xs: 16, sm: 28 }, zIndex: 20, minWidth: 140 }}>Ask AI</Button>}</Box> : <Box className="product-preview" aria-label="pageOracle product preview"><Box className="preview-toolbar"><span /><span /><span /></Box><Box className="preview-content"><Box className="preview-article"><Typography className="preview-kicker">READING CONTEXT</Typography><Typography component="h2">Turn every page into a conversation.</Typography><Typography>Fetch public page text, find the key ideas, and ask questions about it.</Typography></Box><Box className="assistant-card"><Typography className="preview-kicker">PAGEORACLE AI</Typography><Typography component="h3">What does this mean?</Typography><Typography>Highlight text after loading a page to start a conversation.</Typography></Box></Box></Box>}
+        {page ? <Box className="browser-workspace" aria-label="Fetched page text"><Box className="browser-toolbar"><span className="browser-secure">●</span><Typography noWrap>{page.url}</Typography></Box><Box ref={contentRef} className="extracted-page" sx={{ position: 'relative', textAlign: 'left', userSelect: 'text', '& h1, & h2, & h3, & h4, & h5, & h6': { color: '#101827', lineHeight: 1.25, margin: '1.5rem 0 .75rem' }, '& p': { color: '#42536f', fontSize: '18px', lineHeight: 1.8, margin: '0 0 1.25rem' }, '& li': { color: '#42536f', lineHeight: 1.7, margin: '.5rem 0' }, '& blockquote': { borderLeft: '4px solid #0878ee', color: '#52627d', fontStyle: 'italic', margin: '1.5rem 0', padding: '.75rem 1rem' }, '& img': { maxWidth: '100%', height: 'auto' } }}><Typography className="preview-kicker">FETCHED PAGE · {page.wordCount.toLocaleString()} WORDS</Typography><Typography component="h2">{page.title}</Typography><Box dangerouslySetInnerHTML={{ __html: page.html }} />{popoverPosition && <Box className="ai-popover" sx={popoverSx}><Stack direction="row" justifyContent="space-between" alignItems="center"><Typography fontWeight={700} fontSize="1.5rem">Ask AI</Typography><Button size="small" onClick={closeAsk}>Close</Button></Stack><Typography className="selection-preview">“{selection}”</Typography><Box className="conversation">{conversation.map((item, index) => <Box key={`${item.role}-${index}`} className={`chat-message ${item.role}`}><Typography>{item.text}</Typography></Box>)}</Box><Box component="form" onSubmit={askAi} className="chat-form"><TextField value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Ask a follow-up…" size="small" fullWidth /><Button type="submit" disabled={chatLoading || !question.trim()}>{chatLoading ? '…' : 'Send'}</Button></Box></Box>}</Box><Button aria-label="Ask AI about selected text" className={`ask-ai-sticky ${buttonHasShaken && selection ? 'ai-button-shake' : ''}`} variant="contained" disabled={!selectionRect} onMouseDown={(event) => event.preventDefault()} onClick={openAsk} sx={{ position: 'fixed', top: { xs: 16, sm: 24 }, right: { xs: 16, sm: 28 }, zIndex: 20, minWidth: 72, opacity: selectionRect ? 1 : 0.5, transition: 'opacity .2s' }}>AI</Button></Box> : <Box className="product-preview" aria-label="pageOracle product preview"><Box className="preview-toolbar"><span /><span /><span /></Box><Box className="preview-content"><Box className="preview-article"><Typography className="preview-kicker">READING CONTEXT</Typography><Typography component="h2">Turn every page into a conversation.</Typography><Typography>Fetch public page text, find the key ideas, and ask questions about it.</Typography></Box><Box className="assistant-card"><Typography className="preview-kicker">PAGEORACLE AI</Typography><Typography component="h3">What does this mean?</Typography><Typography>Highlight text after loading a page to start a conversation.</Typography></Box></Box></Box>}
       </Box>
     </Container>
   </Box>;
