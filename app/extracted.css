@@ -1,0 +1,4 @@
+/* Additions for server-fetched page context. */
+.extracted-page { margin-top: 12px; padding: 32px; border: 1px solid #e1e8f1; border-radius: 16px; background: #fff; text-align: left; }
+.extracted-page h2 { margin: 18px 0; font-size: clamp(1.8rem, 4vw, 3rem); }
+.extracted-text { color: #42536f; font-size: 18px !important; line-height: 1.8 !important; white-space: pre-wrap; }
