@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { load } from 'cheerio';
+import sanitizeHtml from 'sanitize-html';
 
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
-const MAX_TEXT_LENGTH = 100_000;
+const MAX_HTML_LENGTH = 200_000;
 const REQUEST_TIMEOUT_MS = 10_000;
 
 function isPrivateHostname(hostname) {
@@ -10,8 +11,7 @@ function isPrivateHostname(hostname) {
   if (host === 'localhost' || host === '::1' || host.endsWith('.localhost') || host.endsWith('.local')) return true;
   if (/^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host)) return true;
   const private172 = host.match(/^172\.(\d+)\./);
-  if (private172 && Number(private172[1]) >= 16 && Number(private172[1]) <= 31) return true;
-  return false;
+  return Boolean(private172 && Number(private172[1]) >= 16 && Number(private172[1]) <= 31);
 }
 
 function normalizeUrl(value) {
@@ -24,9 +24,36 @@ function normalizeUrl(value) {
   return url;
 }
 
+function extractSanitizedHtml(source) {
+  const $ = load(source);
+  const title = $('title').first().text().trim() || $('h1').first().text().trim();
+  $('script, style, noscript, template, svg, nav, header, footer, aside, form, iframe, object, embed').remove();
+  const mainArticle = $('main, article').first();
+  const root = mainArticle.length ? mainArticle : $('body');
+  const rawHtml = root.length ? root.html() || '' : '';
+  const html = sanitizeHtml(rawHtml, {
+    allowedTags: [
+      'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'strong', 'b', 'em', 'i', 'u',
+      's', 'blockquote', 'pre', 'code', 'ul', 'ol', 'li', 'a', 'table', 'thead', 'tbody',
+      'tr', 'th', 'td', 'hr', 'sup', 'sub', 'mark', 'img',
+    ],
+    allowedAttributes: {
+      a: ['href', 'title', 'target', 'rel'],
+      img: ['src', 'alt', 'title', 'width', 'height'],
+      '*': ['class'],
+    },
+    allowedSchemes: ['http', 'https', 'mailto'],
+    allowProtocolRelative: false,
+    transformTags: {
+      a: (tagName, attribs) => ({ tagName, attribs: { ...attribs, target: '_blank', rel: 'noopener noreferrer' } }),
+    },
+  }).trim();
+
+  return { title, html };
+}
+
 export async function POST(request) {
   let target;
-
   try {
     const body = await request.json();
     target = normalizeUrl(body?.url);
@@ -41,53 +68,31 @@ export async function POST(request) {
     const response = await fetch(target, {
       signal: controller.signal,
       redirect: 'follow',
-      headers: {
-        'User-Agent': 'pageOracle/1.0 (readability fetcher)',
-        Accept: 'text/html,application/xhtml+xml,text/plain;q=0.9',
-      },
+      headers: { 'User-Agent': 'pageOracle/1.0 (readability fetcher)', Accept: 'text/html,application/xhtml+xml,text/plain;q=0.9' },
     });
-
     if (!response.ok) throw new Error(`The page returned HTTP ${response.status}.`);
-
-    const contentLength = Number(response.headers.get('content-length') || 0);
-    if (contentLength > MAX_RESPONSE_BYTES) throw new Error('The page is too large to read.');
+    if (Number(response.headers.get('content-length') || 0) > MAX_RESPONSE_BYTES) throw new Error('The page is too large to read.');
 
     const contentType = response.headers.get('content-type') || '';
-    if (!contentType.includes('text/html') && !contentType.includes('text/plain')) {
-      throw new Error('This URL does not return readable HTML or text.');
-    }
-
+    if (!contentType.includes('text/html') && !contentType.includes('text/plain')) throw new Error('This URL does not return readable HTML or text.');
     const source = await response.text();
     if (Buffer.byteLength(source, 'utf8') > MAX_RESPONSE_BYTES) throw new Error('The page is too large to read.');
 
     let title = target.hostname;
-    let text = source;
-
+    let html;
     if (contentType.includes('text/html')) {
-      const $ = load(source);
-      title = $('title').first().text().trim() || $('h1').first().text().trim() || target.hostname;
-      $('script, style, noscript, template, svg, nav, header, footer, aside, form').remove();
-
-      const mainArticle = $('main, article').first();
-      // Cheerio's text() getter returns a string. Passing a separator can act as a setter
-      // in some versions, which caused the "replace is not a function" error.
-      text = mainArticle.length ? mainArticle.text() : $('body').text();
+      ({ title, html } = extractSanitizedHtml(source));
+    } else {
+      html = `<p>${source.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`;
     }
 
-    if (typeof text !== 'string') throw new Error('The fetched page did not contain readable text.');
-    text = text.replace(/\s+/g, ' ').trim().slice(0, MAX_TEXT_LENGTH);
-    if (!text) throw new Error('No readable text was found at this URL.');
+    html = html.slice(0, MAX_HTML_LENGTH);
+    if (!html || !load(html).text().trim()) throw new Error('No readable text was found at this URL.');
+    const text = load(html).text().replace(/\s+/g, ' ').trim();
 
-    return NextResponse.json({
-      url: target.toString(),
-      title: title.slice(0, 300),
-      text,
-      wordCount: text.split(/\s+/).filter(Boolean).length,
-    });
+    return NextResponse.json({ url: target.toString(), title: (title || target.hostname).slice(0, 300), html, text, wordCount: text.split(/\s+/).filter(Boolean).length });
   } catch (error) {
-    const message = error.name === 'AbortError'
-      ? 'The page took too long to respond.'
-      : error.message || 'Unable to fetch that page.';
+    const message = error.name === 'AbortError' ? 'The page took too long to respond.' : error.message || 'Unable to fetch that page.';
     return NextResponse.json({ error: message }, { status: 502 });
   } finally {
     clearTimeout(timeout);
