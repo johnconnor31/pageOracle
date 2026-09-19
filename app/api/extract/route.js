@@ -6,7 +6,7 @@ const MAX_TEXT_LENGTH = 100_000;
 const REQUEST_TIMEOUT_MS = 10_000;
 
 function isPrivateHostname(hostname) {
-  const host = hostname.toLowerCase().replace(/\.$/, '');
+  const host = hostname.toLowerCase()?.replace(/\.$/, '');
   if (host === 'localhost' || host === '::1' || host.endsWith('.localhost') || host.endsWith('.local')) return true;
   if (/^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host)) return true;
   const private172 = host.match(/^172\.(\d+)\./);
@@ -69,7 +69,7 @@ export async function POST(request) {
       text = $('main, article').first().text(' ') || $('body').text(' ');
     }
 
-    text = text.replace(/\s+/g, ' ').trim().slice(0, MAX_TEXT_LENGTH);
+    text = text?.replace(/\s+/g, ' ').trim().slice(0, MAX_TEXT_LENGTH);
     if (!text) throw new Error('No readable text was found at this URL.');
 
     return NextResponse.json({
