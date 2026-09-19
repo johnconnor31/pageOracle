@@ -28,27 +28,20 @@ function extractSanitizedHtml(source) {
   const $ = load(source);
   const title = $('title').first().text().trim() || $('h1').first().text().trim();
   $('script, style, noscript, template, svg, nav, header, footer, aside, form, iframe, object, embed').remove();
+  $('a').each((_, element) => $(element).replaceWith($(element).contents()));
   const mainArticle = $('main, article').first();
   const root = mainArticle.length ? mainArticle : $('body');
   const rawHtml = root.length ? root.html() || '' : '';
   const html = sanitizeHtml(rawHtml, {
     allowedTags: [
       'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'strong', 'b', 'em', 'i', 'u',
-      's', 'blockquote', 'pre', 'code', 'ul', 'ol', 'li', 'a', 'table', 'thead', 'tbody',
+      's', 'blockquote', 'pre', 'code', 'ul', 'ol', 'li', 'table', 'thead', 'tbody',
       'tr', 'th', 'td', 'hr', 'sup', 'sub', 'mark', 'img',
     ],
-    allowedAttributes: {
-      a: ['href', 'title', 'target', 'rel'],
-      img: ['src', 'alt', 'title', 'width', 'height'],
-      '*': ['class'],
-    },
-    allowedSchemes: ['http', 'https', 'mailto'],
+    allowedAttributes: { img: ['src', 'alt', 'title', 'width', 'height'], '*': ['class'] },
+    allowedSchemes: ['http', 'https'],
     allowProtocolRelative: false,
-    transformTags: {
-      a: (tagName, attribs) => ({ tagName, attribs: { ...attribs, target: '_blank', rel: 'noopener noreferrer' } }),
-    },
   }).trim();
-
   return { title, html };
 }
 
@@ -60,41 +53,26 @@ export async function POST(request) {
   } catch (error) {
     return NextResponse.json({ error: error.message || 'Enter a valid URL.' }, { status: 400 });
   }
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
   try {
-    const response = await fetch(target, {
-      signal: controller.signal,
-      redirect: 'follow',
-      headers: { 'User-Agent': 'pageOracle/1.0 (readability fetcher)', Accept: 'text/html,application/xhtml+xml,text/plain;q=0.9' },
-    });
+    const response = await fetch(target, { signal: controller.signal, redirect: 'follow', headers: { 'User-Agent': 'pageOracle/1.0 (readability fetcher)', Accept: 'text/html,application/xhtml+xml,text/plain;q=0.9' } });
     if (!response.ok) throw new Error(`The page returned HTTP ${response.status}.`);
     if (Number(response.headers.get('content-length') || 0) > MAX_RESPONSE_BYTES) throw new Error('The page is too large to read.');
-
     const contentType = response.headers.get('content-type') || '';
     if (!contentType.includes('text/html') && !contentType.includes('text/plain')) throw new Error('This URL does not return readable HTML or text.');
     const source = await response.text();
     if (Buffer.byteLength(source, 'utf8') > MAX_RESPONSE_BYTES) throw new Error('The page is too large to read.');
-
-    let title = target.hostname;
+    let title = '';
     let html;
-    if (contentType.includes('text/html')) {
-      ({ title, html } = extractSanitizedHtml(source));
-    } else {
-      html = `<p>${source.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`;
-    }
-
+    if (contentType.includes('text/html')) ({ title, html } = extractSanitizedHtml(source));
+    else html = `<p>${source.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`;
     html = html.slice(0, MAX_HTML_LENGTH);
     if (!html || !load(html).text().trim()) throw new Error('No readable text was found at this URL.');
     const text = load(html).text().replace(/\s+/g, ' ').trim();
-
-    return NextResponse.json({ url: target.toString(), title: (title || target.hostname).slice(0, 300), html, text, wordCount: text.split(/\s+/).filter(Boolean).length });
+    return NextResponse.json({ url: target.toString(), title: title.slice(0, 300), html, text, wordCount: text.split(/\s+/).filter(Boolean).length });
   } catch (error) {
     const message = error.name === 'AbortError' ? 'The page took too long to respond.' : error.message || 'Unable to fetch that page.';
     return NextResponse.json({ error: message }, { status: 502 });
-  } finally {
-    clearTimeout(timeout);
-  }
+  } finally { clearTimeout(timeout); }
 }
