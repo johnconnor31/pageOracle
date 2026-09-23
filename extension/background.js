@@ -8,9 +8,18 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
+chrome.action.onClicked.addListener(async (tab) => {
+  if (!tab?.id) return;
+  try {
+    await chrome.tabs.sendMessage(tab.id, { type: 'PAGEORACLE_TOGGLE' });
+  } catch {
+    // Chrome does not allow content scripts on internal browser pages or the Web Store.
+  }
+});
+
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId !== 'pageoracle-ask' || !tab?.id) return;
-  chrome.tabs.sendMessage(tab.id, { type: 'PAGEORACLE_OPEN', selection: info.selectionText || '' });
+  chrome.tabs.sendMessage(tab.id, { type: 'PAGEORACLE_OPEN', selection: info.selectionText || '' }).catch(() => {});
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
