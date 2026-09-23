@@ -1,19 +1,16 @@
 {
   "manifest_version": 3,
   "name": "pageOracle – Ask AI about any page",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Select text on any webpage and ask pageOracle AI about it.",
-  "permissions": ["storage", "contextMenus"],
+  "permissions": ["storage", "contextMenus", "scripting"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js" },
-  "action": {
-    "default_title": "pageOracle"
-  },
+  "action": { "default_title": "pageOracle" },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
       "js": ["content.js"],
-      "css": ["content.css"],
       "run_at": "document_idle"
     }
   ],
