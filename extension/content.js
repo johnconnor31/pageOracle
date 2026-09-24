@@ -59,7 +59,7 @@
   document.addEventListener('touchend', captureSelection);
   trigger.addEventListener('mousedown', (event) => event.preventDefault());
   trigger.addEventListener('click', openPanel);
-  shadow.querySelector('#close').addEventListener('click', () => { panel.hidden = true; trigger.hidden = false; });
+  shadow.querySelector('#close').addEventListener('click', () => { panel.hidden = true; trigger.hidden = true; });
 
   shadow.querySelector('#form').addEventListener('submit', (event) => {
     event.preventDefault();
