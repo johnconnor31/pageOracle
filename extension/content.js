@@ -35,11 +35,12 @@
   const selectionBox = shadow.querySelector('#selection');
   const messages = shadow.querySelector('#messages');
   const question = shadow.querySelector('#question');
+  const submitButton = shadow.querySelector('#send');
   let selectedText = '';
 
   function openPanel() {
     selectionBox.textContent = selectedText ? `“${selectedText}”` : 'Select some text on this page first.';
-    message.innerHTML = '';
+    messages.innerHTML = '';
     panel.hidden = false;
     trigger.hidden = true;
     question.focus();
@@ -49,9 +50,11 @@
     const current = window.getSelection();
     const text = current?.toString().trim();
     if (!text || current.isCollapsed) {
-      trigger.style.hidden=true;
       return;
       }
+    if(!text) {
+      trigger.hidden = true;
+    }
     selectedText = text.slice(0, 12000);
     const rect = current.getRangeAt(0).getBoundingClientRect();
     trigger.style.left = `${Math.min(window.innerWidth - 52, Math.max(8, rect.right + 8))}px`;
@@ -61,7 +64,9 @@
 
   document.addEventListener('mouseup', captureSelection);
   document.addEventListener('touchend', captureSelection);
-  trigger.addEventListener('mousedown', (event) => event.preventDefault());
+  trigger.addEventListener('mousedown', (event) => {
+    event.preventDefault();
+  });
   trigger.addEventListener('click', openPanel);
   shadow.querySelector('#close').addEventListener('click', () => { panel.hidden = true; trigger.hidden = true; });
 
@@ -73,20 +78,27 @@
     userMessage.className = 'user';
     userMessage.textContent = value;
     messages.appendChild(userMessage);
-    messages.appendChild('Loading...');
-    document.scrollTo({
-    top: document.scrollHeight,
+    const loading = document.createElement('p');
+    loading.id = 'po-loader';
+    loading.textContent = 'Loading...';
+    messages.appendChild(loading);
+    messages.scrollTo({
+    top: messages.scrollHeight,
     behavior: 'smooth',
     });
+    submitButton.disabled = true;
+
     chrome.runtime.sendMessage({ type: 'PAGEORACLE_CHAT', payload: { selection: selectedText, question: value, pageTitle: document.title, pageUrl: location.href } }, (result) => {
+      shadow.getElementById('po-loader')?.remove();
       const message = document.createElement('p');
       message.className = result?.error ? 'error' : 'assistant';
       message.textContent = result?.error || result?.answer || 'No answer returned.';
       messages.appendChild(message);
-      document.scrollTo({
-        top: document.scrollHeight,
-        behavior: 'smooth',
-       });
+      // document.scrollTo({
+      //   top: document.scrollHeight,
+      //   behavior: 'smooth',
+      //  });
+      submitButton.disabled = false;
     });
   });
 
