@@ -14,6 +14,7 @@ export async function POST(request) {
 
   try {
     const { selection, question, pageTitle, pageUrl } = await request.json();
+    console.log('got request',selection, question, pageTitle, pageUrl);
 
     if (typeof selection !== 'string' || !selection.trim()) {
       return NextResponse.json({ error: 'Select some page text first.' }, { status: 400 });
@@ -49,8 +50,9 @@ ${userQuestion}`;
         generationConfig: { temperature: 0.2 },
       }),
     });
-
     const data = await response.json();
+       console.log('response from gemini',data);
+ 
     if (!response.ok) {
       throw new Error(data?.error?.message || 'The Gemini request failed.');
     }
@@ -66,6 +68,7 @@ ${userQuestion}`;
 
     return NextResponse.json({ answer });
   } catch (error) {
+       console.log('error from gemini',error);
     return NextResponse.json(
       { error: error.message || 'Unable to ask AI right now.' },
       { status: 502 },
