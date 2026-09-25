@@ -1,4 +1,4 @@
-const DEFAULT_API_URL = 'http://localhost:3000';
+const DEFAULT_API_URL = 'https://page-oracle-nine.vercel.app';
 
 console.log('[pageOracle] service worker loaded');
 
