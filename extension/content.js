@@ -39,6 +39,7 @@
 
   function openPanel() {
     selectionBox.textContent = selectedText ? `“${selectedText}”` : 'Select some text on this page first.';
+    message.innerHTML = '';
     panel.hidden = false;
     trigger.hidden = true;
     question.focus();
@@ -47,7 +48,10 @@
   function captureSelection() {
     const current = window.getSelection();
     const text = current?.toString().trim();
-    if (!text || current.isCollapsed) return;
+    if (!text || current.isCollapsed) {
+      trigger.style.hidden=true;
+      return;
+      }
     selectedText = text.slice(0, 12000);
     const rect = current.getRangeAt(0).getBoundingClientRect();
     trigger.style.left = `${Math.min(window.innerWidth - 52, Math.max(8, rect.right + 8))}px`;
@@ -69,11 +73,20 @@
     userMessage.className = 'user';
     userMessage.textContent = value;
     messages.appendChild(userMessage);
+    messages.appendChild('Loading...');
+    document.scrollTo({
+    top: document.scrollHeight,
+    behavior: 'smooth',
+    });
     chrome.runtime.sendMessage({ type: 'PAGEORACLE_CHAT', payload: { selection: selectedText, question: value, pageTitle: document.title, pageUrl: location.href } }, (result) => {
       const message = document.createElement('p');
       message.className = result?.error ? 'error' : 'assistant';
       message.textContent = result?.error || result?.answer || 'No answer returned.';
       messages.appendChild(message);
+      document.scrollTo({
+        top: document.scrollHeight,
+        behavior: 'smooth',
+       });
     });
   });
 
