@@ -9,8 +9,8 @@
     :host { all: initial; }
     * { box-sizing: border-box; }
     button, input { font: 14px Arial, sans-serif; }
-    #trigger { position: fixed; z-index: 2147483647; width: 42px; height: 42px; border: 0; border-radius: 50%; color: #fff; background: #111827; box-shadow: 0 8px 22px rgba(0,0,0,.25); cursor: pointer; font-size: 22px; }
-    #panel { position: fixed; z-index: 2147483647; top: 24px; right: 24px; width: min(380px, calc(100vw - 32px)); padding: 16px; border: 1px solid #dbe4ef; border-radius: 16px; background: #fff; color: #101827; box-shadow: 0 18px 48px rgba(15,23,42,.25); font: 14px Arial, sans-serif; }
+    #trigger { position: fixed; z-index: 2147483647; width: 42px; height: 42px; border: 0; border-radius: 50%; color: #fff; background: #111827; box-shadow: 0 8px 22px rgba(0,0,0,.25); cursor: pointer; }
+    #panel { position: fixed; z-index: 2147483647; top: 24px; right: 24px; width: min(380px, calc(100vw - 32px)); padding: 16px; border: 1px solid #dbe4ef; border-radius: 16px; background: #fff; color: #1f2937; }
     #panel header { display: flex; align-items: center; justify-content: space-between; font-size: 18px; }
     #panel header button { border: 0; background: transparent; cursor: pointer; font-size: 24px; }
     #selection { margin: 14px 0; padding: 10px; border-left: 3px solid #1976d2; color: #4b5f7d; max-height: 100px; overflow: auto; }
@@ -28,7 +28,7 @@
   host.id = 'pageoracle-root';
   document.documentElement.appendChild(host);
   const shadow = host.attachShadow({ mode: 'open' });
-  shadow.innerHTML = `<style>${STYLE}</style><button id="trigger" aria-label="Ask AI" title="Ask AI">✦</button><section id="panel" hidden><header><strong>Ask AI</strong><button id="close" aria-label="Close">×</button></header><blockquote id="selection"></blockquote><div id="messages"></div><form id="form"><input id="question" value="Explain this in simple terms." aria-label="Question" /><button id="send" aria-label="Send">➤</button></form></section>`;
+  shadow.innerHTML = `<style>${STYLE}</style><button id="trigger" aria-label="Ask AI" title="Ask AI">✦</button><section id="panel" hidden><header><strong>Ask AI</strong><button id="close" aria-label="Close" title="Close">✕</button></header><div id="selection"></div><div id="messages"></div><form id="form"><input id="question" type="text" placeholder="Ask your question..." autocomplete="off" /><button id="send" type="submit" aria-label="Send">↵</button></form></section>`;
 
   const trigger = shadow.querySelector('#trigger');
   const panel = shadow.querySelector('#panel');
@@ -38,8 +38,13 @@
   const submitButton = shadow.querySelector('#send');
   let selectedText = '';
 
+  function closePanel() {
+    panel.hidden = true;
+    trigger.hidden = true;
+  }
+
   function openPanel() {
-    selectionBox.textContent = selectedText ? `“${selectedText}”` : 'Select some text on this page first.';
+    selectionBox.textContent = selectedText ? `"${selectedText}"` : 'Select some text on this page first.';
     messages.innerHTML = '';
     panel.hidden = false;
     trigger.hidden = true;
@@ -62,13 +67,32 @@
     trigger.hidden = false;
   }
 
+  // Close when clicking outside the panel or trigger
+  document.addEventListener(
+    'mousedown',
+    (event) => {
+      const path = event.composedPath();
+      const clickedInside = path.includes(panel) || path.includes(trigger);
+      if (!clickedInside) {
+        closePanel();
+      }
+    },
+    true
+  );
+
   document.addEventListener('mouseup', captureSelection);
   document.addEventListener('touchend', captureSelection);
   trigger.addEventListener('mousedown', (event) => {
     event.preventDefault();
   });
-  trigger.addEventListener('click', openPanel);
-  shadow.querySelector('#close').addEventListener('click', () => { panel.hidden = true; trigger.hidden = true; });
+  trigger.addEventListener('click', (event) => {
+    event.stopPropagation();
+    openPanel();
+  });
+  shadow.querySelector('#close').addEventListener('click', (event) => {
+    event.stopPropagation();
+    closePanel();
+  });
 
   shadow.querySelector('#form').addEventListener('submit', (event) => {
     event.preventDefault();
@@ -94,10 +118,6 @@
       message.className = result?.error ? 'error' : 'assistant';
       message.textContent = result?.error || result?.answer || 'No answer returned.';
       messages.appendChild(message);
-      // document.scrollTo({
-      //   top: document.scrollHeight,
-      //   behavior: 'smooth',
-      //  });
       submitButton.disabled = false;
     });
   });
