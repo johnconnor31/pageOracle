@@ -28,7 +28,7 @@
   host.id = 'pageoracle-root';
   document.documentElement.appendChild(host);
   const shadow = host.attachShadow({ mode: 'open' });
-  shadow.innerHTML = `<style>${STYLE}</style><button id="trigger" aria-label="Ask AI" title="Ask AI">✦</button><section id="panel" hidden><header><strong>Ask AI</strong><button id="close" aria-label="Close" title="Close">✕</button></header><div id="selection"></div><div id="messages"></div><form id="form"><input id="question" type="text" placeholder="Ask your question..." autocomplete="off" /><button id="send" type="submit" aria-label="Send">↵</button></form></section>`;
+  shadow.innerHTML = `<style>${STYLE}</style><button id="trigger" aria-label="Ask AI" title="Ask AI">✦</button><section id="panel" hidden><header><strong>Ask AI</strong><button id="close" aria-label="Close" title="Close">✕</button></header><div id="selection"></div><div id="messages"></div><form id="form"><input id="question" type="text" placeholder="Explain this..." autocomplete="off" /><button id="send" type="submit" aria-label="Send">↵</button></form></section>`;
 
   const trigger = shadow.querySelector('#trigger');
   const panel = shadow.querySelector('#panel');
@@ -37,15 +37,18 @@
   const question = shadow.querySelector('#question');
   const submitButton = shadow.querySelector('#send');
   let selectedText = '';
+  const DEFAULT_QUESTION = 'Explain this...';
 
   function closePanel() {
     panel.hidden = true;
     trigger.hidden = true;
+    question.value = DEFAULT_QUESTION;
   }
 
   function openPanel() {
     selectionBox.textContent = selectedText ? `"${selectedText}"` : 'Select some text on this page first.';
     messages.innerHTML = '';
+    question.value = DEFAULT_QUESTION;
     panel.hidden = false;
     trigger.hidden = true;
     question.focus();
