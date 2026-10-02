@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 
 const MAX_SELECTION_LENGTH = 12_000;
 const MAX_MESSAGE_LENGTH = 2_000;
-const DEFAULT_SARVAM_MODEL = 'Meta-Llama-3-8B-Instruct';
+const DEFAULT_SARVAM_MODEL = 'sarvam-105b-conversations';
+const SARVAM_ENDPOINT = 'https://api.sarvam.ai/chat/completions';
 
 export async function POST(request) {
   const requestId = crypto.randomUUID();
@@ -38,22 +39,15 @@ export async function POST(request) {
     const selectedText = selection && typeof selection === 'string' ? selection.trim().slice(0, MAX_SELECTION_LENGTH) : '';
     const userQuestion = question.trim().slice(0, MAX_MESSAGE_LENGTH);
     const model = process.env.SARVAM_MODEL || DEFAULT_SARVAM_MODEL;
-    
-    // Build context-aware prompt
-    let prompt = `You are pageOracle, a helpful reading companion that answers questions about web content.`;
-    
-    if (pageTitle || pageUrl) {
-      prompt += `\n\nCurrent page context:`;
-      if (pageTitle) prompt += `\nTitle: ${pageTitle}`;
-      if (pageUrl) prompt += `\nURL: ${pageUrl}`;
-    }
-    
-    if (selectedText) {
-      prompt += `\n\nSelected text from the page:\n"${selectedText}"`;
-    }
-    
-    prompt += `\n\nUser question: ${userQuestion}`;
-    prompt += `\n\nProvide a helpful, concise answer. If you're using the selected text as context, reference it. If the user asks a general question unrelated to the selection, answer it helpfully anyway.`;
+
+    const prompt = `You are pageOracle, a helpful reading companion for web content.
+
+Current page context:
+${pageTitle ? `Title: ${pageTitle}\n` : ''}${pageUrl ? `URL: ${pageUrl}\n` : ''}
+${selectedText ? `Selected text:\n"${selectedText}"\n\n` : ''}
+User question: ${userQuestion}
+
+Answer concisely and helpfully. If the selection is relevant, use it as context; otherwise, answer the question helpfully without requiring the selected text to match.`;
 
     console.log('[pageOracle/api/chat] calling Sarvam', {
       requestId,
@@ -62,18 +56,17 @@ export async function POST(request) {
       questionLength: userQuestion.length,
     });
 
-    const sarvamResponse = await fetch('https://api.sarvam.ai/generate', {
+    const sarvamResponse = await fetch(SARVAM_ENDPOINT, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.SARVAM_API_KEY}`,
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         model,
-        prompt,
-        max_sampling_length: 1024,
+        messages: [{ role: 'user', content: prompt }],
         temperature: 0.2,
-        top_p: 0.95,
+        max_tokens: 512,
       }),
     });
 
@@ -107,11 +100,14 @@ export async function POST(request) {
       throw new Error(data?.error?.message || data?.message || 'The Sarvam request failed.');
     }
 
-    const answer = data?.generatedText?.trim();
+    const answer =
+      data?.choices?.[0]?.message?.content?.trim() ||
+      data?.output?.trim() ||
+      '';
 
     console.log('[pageOracle/api/chat] Sarvam response parsed', {
       requestId,
-      answerLength: answer?.length || 0,
+      answerLength: answer.length,
     });
 
     if (!answer) {
