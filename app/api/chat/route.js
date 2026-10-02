@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 const MAX_SELECTION_LENGTH = 12_000;
 const MAX_MESSAGE_LENGTH = 2_000;
 const DEFAULT_SARVAM_MODEL = 'sarvam-105b-conversations';
-const SARVAM_ENDPOINT = 'https://api.sarvam.ai/chat/completions';
+const SARVAM_ENDPOINT = 'https://api.sarvam.ai/v1/chat/completions';
 
 export async function POST(request) {
   const requestId = crypto.randomUUID();
