@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 const MAX_SELECTION_LENGTH = 12_000;
 const MAX_MESSAGE_LENGTH = 2_000;
-const DEFAULT_GEMINI_MODEL = 'gemini-2.0-flash';
+const DEFAULT_SARVAM_MODEL = 'Meta-Llama-3-8B-Instruct';
 
 export async function POST(request) {
   const requestId = crypto.randomUUID();
@@ -10,10 +10,10 @@ export async function POST(request) {
 
   console.log('[pageOracle/api/chat] request started', { requestId });
 
-  if (!process.env.GEMINI_API_KEY) {
-    console.error('[pageOracle/api/chat] missing GEMINI_API_KEY', { requestId });
+  if (!process.env.SARVAM_API_KEY) {
+    console.error('[pageOracle/api/chat] missing SARVAM_API_KEY', { requestId });
     return NextResponse.json(
-      { error: 'GEMINI_API_KEY is not configured on the server.' },
+      { error: 'SARVAM_API_KEY is not configured on the server.' },
       { status: 500 },
     );
   }
@@ -30,55 +30,58 @@ export async function POST(request) {
       pageUrl,
     });
 
-    if (typeof selection !== 'string' || !selection.trim()) {
-      console.warn('[pageOracle/api/chat] invalid selection', { requestId });
-      return NextResponse.json({ error: 'Select some page text first.' }, { status: 400 });
-    }
-
     if (typeof question !== 'string' || !question.trim()) {
       console.warn('[pageOracle/api/chat] invalid question', { requestId });
       return NextResponse.json({ error: 'Enter a question.' }, { status: 400 });
     }
 
-    const selectedText = selection.trim().slice(0, MAX_SELECTION_LENGTH);
+    const selectedText = selection && typeof selection === 'string' ? selection.trim().slice(0, MAX_SELECTION_LENGTH) : '';
     const userQuestion = question.trim().slice(0, MAX_MESSAGE_LENGTH);
-    const model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
-    const prompt = `Page: ${pageTitle || 'Untitled'}
-URL: ${pageUrl || ''}
+    const model = process.env.SARVAM_MODEL || DEFAULT_SARVAM_MODEL;
+    
+    // Build context-aware prompt
+    let prompt = `You are pageOracle, a helpful reading companion that answers questions about web content.`;
+    
+    if (pageTitle || pageUrl) {
+      prompt += `\n\nCurrent page context:`;
+      if (pageTitle) prompt += `\nTitle: ${pageTitle}`;
+      if (pageUrl) prompt += `\nURL: ${pageUrl}`;
+    }
+    
+    if (selectedText) {
+      prompt += `\n\nSelected text from the page:\n"${selectedText}"`;
+    }
+    
+    prompt += `\n\nUser question: ${userQuestion}`;
+    prompt += `\n\nProvide a helpful, concise answer. If you're using the selected text as context, reference it. If the user asks a general question unrelated to the selection, answer it helpfully anyway.`;
 
-Selected text:
-${selectedText}
-
-Question:
-${userQuestion}`;
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(process.env.GEMINI_API_KEY)}`;
-
-    console.log('[pageOracle/api/chat] calling Gemini', {
+    console.log('[pageOracle/api/chat] calling Sarvam', {
       requestId,
       model,
       selectedTextLength: selectedText.length,
       questionLength: userQuestion.length,
     });
 
-    const geminiResponse = await fetch(endpoint, {
+    const sarvamResponse = await fetch('https://api.sarvam.ai/generate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.SARVAM_API_KEY}`,
+      },
       body: JSON.stringify({
-        systemInstruction: {
-          parts: [{
-            text: 'You are pageOracle, a concise and helpful reading companion. Answer using the selected page text as context. If the answer is not supported by the selection, say so clearly instead of inventing facts.',
-          }],
-        },
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2 },
+        model,
+        prompt,
+        max_sampling_length: 1024,
+        temperature: 0.2,
+        top_p: 0.95,
       }),
     });
 
-    const responseText = await geminiResponse.text();
-    console.log('[pageOracle/api/chat] Gemini response received', {
+    const responseText = await sarvamResponse.text();
+    console.log('[pageOracle/api/chat] Sarvam response received', {
       requestId,
-      status: geminiResponse.status,
-      ok: geminiResponse.ok,
+      status: sarvamResponse.status,
+      ok: sarvamResponse.ok,
       responseLength: responseText.length,
       elapsedMs: Date.now() - startedAt,
     });
@@ -87,44 +90,37 @@ ${userQuestion}`;
     try {
       data = JSON.parse(responseText);
     } catch (parseError) {
-      console.error('[pageOracle/api/chat] Gemini returned non-JSON', {
+      console.error('[pageOracle/api/chat] Sarvam returned non-JSON', {
         requestId,
         responsePreview: responseText.slice(0, 500),
         parseError: parseError.message,
       });
-      throw new Error('Gemini returned an invalid response.');
+      throw new Error('Sarvam returned an invalid response.');
     }
 
-    if (!geminiResponse.ok) {
-      console.error('[pageOracle/api/chat] Gemini API error', {
+    if (!sarvamResponse.ok) {
+      console.error('[pageOracle/api/chat] Sarvam API error', {
         requestId,
-        status: geminiResponse.status,
-        error: data?.error,
+        status: sarvamResponse.status,
+        error: data?.error || data?.message,
       });
-      throw new Error(data?.error?.message || 'The Gemini request failed.');
+      throw new Error(data?.error?.message || data?.message || 'The Sarvam request failed.');
     }
 
-    const candidate = data?.candidates?.[0];
-    const answer = candidate?.content?.parts
-      ?.map((part) => part.text || '')
-      .join('')
-      .trim();
+    const answer = data?.generatedText?.trim();
 
-    console.log('[pageOracle/api/chat] Gemini candidate parsed', {
+    console.log('[pageOracle/api/chat] Sarvam response parsed', {
       requestId,
-      candidateCount: data?.candidates?.length || 0,
-      finishReason: candidate?.finishReason,
       answerLength: answer?.length || 0,
-      promptFeedback: data?.promptFeedback,
     });
 
     if (!answer) {
-      console.error('[pageOracle/api/chat] Gemini returned no answer', {
+      console.error('[pageOracle/api/chat] Sarvam returned no answer', {
         requestId,
         responseKeys: Object.keys(data || {}),
-        candidate,
+        data,
       });
-      throw new Error('Gemini returned an empty response.');
+      throw new Error('Sarvam returned an empty response.');
     }
 
     console.log('[pageOracle/api/chat] request completed', {
