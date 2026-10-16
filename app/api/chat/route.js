@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
+import { clientIp, createRateLimiter } from './rate-limit.mjs';
 
 const MAX_SELECTION_LENGTH = 12_000;
 const MAX_MESSAGE_LENGTH = 2_000;
+const MAX_TITLE_LENGTH = 300;
+const MAX_URL_LENGTH = 2_000;
+const perIpLimit = createRateLimiter({ limit: 10, windowMs: 60_000 });
+const globalLimit = createRateLimiter({ limit: 120, windowMs: 60_000, maxKeys: 1 });
 const DEFAULT_SARVAM_MODEL = 'sarvam-105b-conversations';
 const SARVAM_ENDPOINT = 'https://api.sarvam.ai/v1/chat/completions';
 
@@ -10,6 +15,16 @@ export async function POST(request) {
   const startedAt = Date.now();
 
   console.log('[pageOracle/api/chat] request started', { requestId });
+
+  const ipCheck = perIpLimit(clientIp(request));
+  const globalCheck = ipCheck.allowed ? globalLimit('all') : ipCheck;
+  if (!globalCheck.allowed) {
+    console.warn('[pageOracle/api/chat] rate limited', { requestId, scope: ipCheck.allowed ? 'global' : 'ip' });
+    return NextResponse.json(
+      { error: 'Too many requests. Please wait a minute and try again.' },
+      { status: 429, headers: { 'Retry-After': String(globalCheck.retryAfterSeconds) } },
+    );
+  }
 
   if (!process.env.SARVAM_API_KEY) {
     console.error('[pageOracle/api/chat] missing SARVAM_API_KEY', { requestId });
@@ -21,7 +36,9 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    const { selection, question, pageTitle, pageUrl } = body || {};
+    const { selection, question } = body || {};
+    const pageTitle = typeof body?.pageTitle === 'string' ? body.pageTitle.slice(0, MAX_TITLE_LENGTH) : '';
+    const pageUrl = typeof body?.pageUrl === 'string' ? body.pageUrl.slice(0, MAX_URL_LENGTH) : '';
 
     console.log('[pageOracle/api/chat] request parsed', {
       requestId,
